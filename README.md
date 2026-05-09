@@ -16,6 +16,7 @@ The device reports:
 - Relative humidity
 - Battery percentage
 - Battery voltage
+- Online / offline status
 
 ---
 
@@ -24,8 +25,9 @@ The device reports:
 1. In Hubitat, go to **Drivers Code → New Driver**
 2. Paste the contents of `TZ-Z3TH13_GA.groovy` and click **Save**
 3. Pair your sensor to Hubitat as usual — it should auto-match via the fingerprint
-4. If it doesn't auto-match, go to the device page and manually select **Tuya TS0201 Temp/Humidity Sensor with LCD**
-5. Click **Refresh** to initialise reporting and push the default Zigbee reporting intervals
+4. If it doesn't auto-match, go to the device page and manually select **Wing TS0201 Temp/Humidity Sensor**
+5. Click **Configure** to push Zigbee reporting intervals to the device
+6. Click **Refresh** to request an initial reading
 
 ---
 
@@ -47,6 +49,7 @@ The device reports:
 | `temperature` | number | °C / °F | Ambient temperature |
 | `humidity` | number | % RH | Relative humidity |
 | `battery` | number | % | Battery percentage |
+| `healthStatus` | enum | — | `online`, `offline`, or `unknown` |
 
 ---
 
@@ -54,8 +57,9 @@ The device reports:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Temperature Offset | Added to raw temperature reading | 0.0 |
-| Humidity Offset | Added to raw humidity reading | 0.0 |
+| Temperature Offset | Added to raw temperature reading (°C) | 0.0 |
+| Humidity Offset | Added to raw humidity reading (%) | 0.0 |
+| Offline Timeout | Seconds of silence before marking sensor offline (min 300) | 3600 |
 | Enable Debug Logging | Logs raw Zigbee parsing and reporting activity (auto-disables after 30 min) | false |
 | Enable Description Text Logging | Logs human-readable sensor updates | true |
 
@@ -94,6 +98,21 @@ Battery percentage (`0x0021`) is preferred when available.
 
 If the device only reports voltage, the driver estimates battery percentage using a 2.1V–3.0V range.
 
+> **Note:** This is a sleepy battery-powered end device. On-demand battery reads via **Refresh** may go unanswered if the device is asleep. Battery will populate on the next natural wake cycle.
+
+---
+
+## Health Status
+
+The driver tracks whether the sensor is actively reporting via the `healthStatus` attribute (`online` / `offline` / `unknown`).
+
+- Any valid incoming Zigbee message marks the device **online** and resets the offline timer
+- If no message is received within the configured **Offline Timeout**, the device is marked **offline**
+- On first install, before any message is received, status is **unknown**
+- The timeout defaults to 600 seconds (2× the maximum reporting interval), giving the device one missed cycle before triggering
+
+The `ping()` command is supported (required by the Health Check capability) and triggers a **Refresh**.
+
 ---
 
 ## Temperature & Humidity Offsets
@@ -109,34 +128,32 @@ Examples:
 - `-1.5` temperature offset → subtracts 1.5°C
 - `+3` humidity offset → adds 3% RH
 
-Offsets are applied before events are generated.
+Offsets are applied before events are generated. The raw (pre-offset) value is stored in device data for reference.
 
 ---
 
 ## Device Data Values
 
-The driver stores useful diagnostic information in device data values:
+The driver stores diagnostic information visible at the bottom of the device page:
 
 | Data Value | Description |
 |------------|-------------|
 | `lastTemperatureRaw` | Last unadjusted temperature |
-| `lastTemperatureOffset` | Applied temperature offset |
+| `lastTemperatureOffset` | Applied temperature offset (if non-zero) |
 | `lastHumidityRaw` | Last unadjusted humidity |
-| `lastHumidityOffset` | Applied humidity offset |
-| `lastBatteryRaw` | Raw battery percentage attribute |
+| `lastHumidityOffset` | Applied humidity offset (if non-zero) |
+| `lastBatteryRaw` | Raw battery percentage attribute value |
 | `lastBatteryVoltage` | Last reported battery voltage |
-
-Useful for troubleshooting calibration and battery behaviour.
 
 ---
 
 ## Notes
 
 - Catchall Zigbee frames are intentionally ignored to reduce logging noise
-- Temperature values are reported internally in 0.01°C units
-- Humidity values are reported internally in 0.01% RH units
+- Temperature values are reported by the device in 0.01°C units
+- Humidity values are reported by the device in 0.01% RH units
 - Fahrenheit conversion follows Hubitat location settings automatically
-- Some TS0201 variants may require additional fingerprints depending on firmware/manufacturer branding
+- Some TS0201 variants may require additional fingerprints depending on firmware or manufacturer branding
 
 ---
 
@@ -148,7 +165,7 @@ The **Refresh** command requests:
 - Temperature
 - Humidity
 
-Because this is a sleepy battery-powered Zigbee end device, refresh responses may not be immediate depending on the device wake cycle.
+Because this is a sleepy battery-powered Zigbee end device, responses may not be immediate depending on the device wake cycle.
 
 ---
 
