@@ -18,7 +18,7 @@ import groovy.transform.Field
 @Field static final String VERSION = "1.0.0"
 // How many seconds of silence before marking offline.
 // Device max reporting interval is 300s, so 600s gives 2 missed cycles.
-@Field static final int OFFLINE_TIMEOUT_SECS = 600
+@Field static final int OFFLINE_TIMEOUT_SECS = 3600
 
 metadata {
     definition(
